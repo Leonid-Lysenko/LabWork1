@@ -3,7 +3,6 @@
 */
 
 #include "bmpData.h"
-#include <cmath>
 
 // This function calculates the value of the Gaussian function for a given x, y, and indicator.
 double bmpData::GaussF(int x, int y, double indicator)
