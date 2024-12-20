@@ -1,57 +1,73 @@
 ﻿/* Leonid Lysenko st128618@student.spbu.ru
    Lab1
 */
-#include <iostream>
-#include <vector>
 
-#include "bmpdata.h"
-#include "filter.h"
-#include "bmpR_W.h"
-#include "rotate.h"
-#include "gaussian_filter.h"
-
-/*
--> The function below is the main one. It reads and rotates the image clockwise and counterclockwise, respectively.
--> Also, a Gaussian filter is applied to both inverted images.
-*/
+#include "bmpData.h"
 
 int main()
 {
-    bmpdata header;
+    // Variables to store the size of the core and indicator for Gaussian filter.
+    int sizeOfCore;
+    double indicator;
 
-    std::vector<unsigned char> pix;
+    // Prompt the user to enter the size of the core for the Gaussian filter.
+    std::cout << "What size of thr core you want for the Gaussian filter? Enter odd numbers! for example 5:   ";
+    std::cin >> sizeOfCore;
+    // Prompt the user to enter the indicator for the Gaussian filter.
+    std::cout << "Please, enter the indicatot for the Gaussian filter: for example 5.0:   ";
+    std::cin >> indicator;
 
+    // Load the image from "image.bmp"
+    bmpData bmpImage("image.bmp");
+    // Create a copy of the original image.
+    bmpData otherImage = bmpImage;
 
+    // Rotate the first image 90 degrees to the right.
+    bmpImage.rotateRT();
 
-    // For clockwise rotation + Gaussian filter.
+    // Save the rotated image to "RT.bmp".
+    if (!bmpImage.savingFile("RT.bmp"))
+    {
+        std::cout << "Error. Image cannot be saved!" << std::endl;
+        return -1;
+    }
 
-    bmpread("image.bmp", pix, header);
+    std::cout << "Image rotated 90 degrees to the right. Saved in 'RT.bmp'!" << std::endl;
 
-    rotateImageRight(pix, header.width, header.height);
-    header.fileSize = sizeof(header) + pix.size();
+    // Apply Gaussian filter to the rotated image.
+    bmpImage.filterOfGauss(sizeOfCore, indicator);
 
-    bmpwrite("right.bmp", pix, header);
-    std::cout << "Файл image.bmp повернут на 90 градусов вправо и загружен в файл right.bmp!" << std::endl;
+    // Save the Gaussian filtered image.
+    if (!bmpImage.savingFile("RT+GaussFilter.bmp"))
+    {
+        std::cout << "Error. Image cannot be saved!" << std::endl;
+        return -1;
+    }
 
-    filterOfGauss(pix, header.width, header.height);
-    bmpwrite("rightGauss.bmp", pix, header);
-    std::cout << "Фильтр Гаусса применен!" << std::endl;
+    std::cout << "Gaussian filtered image saved: 'RT+GaussFilter.bmp'!" << std::endl;
 
+    // Rotate the second image 90 degrees to the left.
+    otherImage.rotateLF();
+    // Save the rotated image.
+    if (!otherImage.savingFile("LF.bmp"))
+    {
+        std::cout << "Error. Image cannot be saved!" << std::endl;
+        return -1;
+    }
 
+    std::cout << "Image rotated 270 degrees to the right. Saved in 'LF.bmp'!" << std::endl;
 
-    // For counter-clockwise rotation + Gaussian filter.
+    // Apply Gaussian filter to the rotated image.
+    otherImage.filterOfGauss(sizeOfCore, indicator);
 
-    bmpread("image.bmp", pix, header);
+    // Save the Gaussian filtered image.
+    if (!otherImage.savingFile("LT+GaussFilter.bmp"))
+    {
+        std::cout << "Error saving image!" << std::endl;
+        return -1;
+    }
+    std::cout << "Gaussian filtered image saved: 'LF+GaussFilter.bmp'!" << std::endl;
 
-    rotateImageLeft(pix, header.width, header.height);
-    header.fileSize = sizeof(header) + pix.size();
-
-    bmpwrite("left.bmp", pix, header);
-    std::cout << "Файл image.bmp повернут на 90 градусов влево и загружен в файл left.bmp!" << std::endl;
-
-    filterOfGauss(pix, header.width, header.height);
-    bmpwrite("leftGauss.bmp", pix, header);
-    std::cout << "Фильтр Гаусса применен!" << std::endl;
-
+    // Program executed successfully
     return 0;
 }
