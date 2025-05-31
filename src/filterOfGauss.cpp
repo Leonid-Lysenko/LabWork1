@@ -1,120 +1,155 @@
-﻿/* Leonid Lysenko st128618@student.spbu.ru
+/* Leonid Lysenko st128618@student.spbu.ru
    Lab1
 */
 
 #include "bmpData.h"
 
-// This function calculates the value of the Gaussian function for a given x, y, and indicator.
+/**
+ * @brief Calculates the value of the Gaussian function at coordinates (x, y).
+ * 
+ * The formula used is:
+ * \f[
+ * \frac{1}{2 \pi \sigma^2} \exp\left(-\frac{x^2 + y^2}{2 \sigma^2}\right)
+ * \f]
+ * where \f$\sigma\f$ is the indicator parameter.
+ * 
+ * @param x X coordinate relative to kernel center.
+ * @param y Y coordinate relative to kernel center.
+ * @param indicator Standard deviation (sigma) of the Gaussian.
+ * @return Gaussian function value at (x, y).
+ */
 double bmpData::GaussF(int x, int y, double indicator)
 {
-    // The Gaussian formula: (1 / (2 * pi * indicator^2)) * exp(-(x^2 + y^2) / (2 * indicator^2)).
     return (1.0/(2* M_PI*pow(indicator, 2)))*exp(-(pow(x, 2) + pow(y, 2))/(2*pow(indicator, 2)));
 }
 
-// This function generates a Gaussian core matrix of the given size and indicator.
+/**
+ * @brief Generates a Gaussian kernel matrix of given size and indicator.
+ * 
+ * The kernel is normalized so that the sum of all elements equals 1.
+ * 
+ * @param size Size of the kernel (must be odd).
+ * @param indicator Standard deviation (sigma) of the Gaussian.
+ * @return 2D vector representing the Gaussian kernel matrix.
+ */
 std::vector<std::vector<double>> bmpData::matrixOfCore(int size, double indicator)
 {
-    // Create a core matrix of the given size with double values.
     std::vector<std::vector<double>> core(size, std::vector<double>(size));
-
-    // Initialize the sum and the middle point of the core matrix.
     double sum = 0.0;
     int midst = size/2;
 
-    // Iterate over each element in the core matrix.
     for (int x = 0; x < size; x++)
     {
         for (int y = 0; y < size; y++)
         {
-            // Calculate the Gaussian value for the current position and add it to the sum.
             core[x][y] = GaussF(x-midst, midst-y, indicator);
             sum += core[x][y];
         }
     }
 
-    // Iterate over each element in the core matrix again.
     for (int x = 0; x < size; x++)
     {
         for (int y = 0; y < size; y++)
         {
-            // Normalize the value by dividing it by the total sum of the Gaussian values.
             core[x][y] /= sum;
         }
     }
-    // Return the generated Gaussian core matrix.
     return core;
 }
 
-// This function applies the filter core to a pixel at given x, y coordinates.
+/**
+ * @brief Applies the Gaussian kernel to a pixel at position (x, y).
+ * 
+ * This function performs convolution by multiplying neighboring pixels by kernel weights.
+ * Pixel coordinates are clamped to image boundaries.
+ * 
+ * @param x X coordinate of the target pixel.
+ * @param y Y coordinate of the target pixel.
+ * @param core Gaussian kernel matrix.
+ * @param midst Half of the kernel size (kernel center offset).
+ * @param red Reference to accumulate the red channel value.
+ * @param green Reference to accumulate the green channel value.
+ * @param blue Reference to accumulate the blue channel value.
+ */
 void bmpData::pixCore(int x, int y, const std::vector<std::vector<double>>& core, int midst, double& red, double& green, double& blue)
 {
-    // Iterate over the core matrix.
-    for (int l = -(midst); l <= midst; l++)
+    for (int l = -midst; l <= midst; l++)
     {
-        for (int m = -(midst); m <= midst; m++)
+        for (int m = -midst; m <= midst; m++)
         {
-            // Calculate the coordinates of the neighboring pixel.
-            int pixX = x+m;
-            int pixY = y+l;
+            int pixX = x + m;
+            int pixY = y + l;
 
-            // Clamp the pixel coordinates to the boundaries of the image.
             if (pixX < 0) pixX = 0;
-
             if (pixY < 0) pixY = 0;
+            if (pixX >= width) pixX = width - 1;
+            if (pixY >= height) pixY = height - 1;
 
-            if (pixX >= width) pixX = width-1;
-
-            if (pixY >= height) pixY = height-1;
-
-            // Calculate the index of the neighboring pixel.
             int pixIND1 = (pixY * (width * 3 + (4 - (width * 3) % 4) % 4) + pixX * 3);
-
-            // Get the weight from the core matrix.
             double weight = core[l + midst][m + midst];
 
-            // Accumulate the weighted values for blue, green, and red channels.
-            blue += pix[pixIND1]*weight;
-            green += pix[pixIND1+1]*weight;
-            red += pix[pixIND1+2]*weight;
+            blue += pix[pixIND1] * weight;
+            green += pix[pixIND1 + 1] * weight;
+            red += pix[pixIND1 + 2] * weight;
         }
     }
 }
 
-// This function applies the Gaussian filter to the image.
-void bmpData::filterOfGauss(int sizeOfCore, double indicator)
+/**
+ * @brief Applies a Gaussian filter to the entire image.
+ * 
+ * The image is processed using multiple threads for performance.
+ * 
+ * @param sizeOfCore Size of the Gaussian kernel (should be odd).
+ * @param indicator Standard deviation (sigma) of the Gaussian.
+ * @param numThreads Number of threads to use for processing (default 4).
+ */
+void bmpData::filterOfGauss(int sizeOfCore, double indicator, int numThreads)
 {
-    // Generate the Gaussian core matrix.
     std::vector<std::vector<double>> core = matrixOfCore(sizeOfCore, indicator);
-    // Create a new pixel vector to store the filtered pixel data.
     std::vector<uint8_t> filtpix(pix);
 
-    // Calculate the padding for the image.
-    int bmpPadd1 = (4-(width*3)%4)%4;
-    // Calculate the middle point of the core matrix.
-    int midst = sizeOfCore/2;
+    int bmpPadd1 = (4 - (width * 3) % 4) % 4;
+    int midst = sizeOfCore / 2;
 
-    // Iterate over each pixel in the image.
-    for (int y = 0; y < height; y++)
+    auto processSection = [&](int startY, int endY)
     {
-        for (int x = 0; x < width; x++)
+        for (int y = startY; y < endY; y++)
         {
-            // Initialize the weighted values for blue, green, and red channels.
-            double red = 0.0;
-            double green = 0.0;
-            double blue = 0.0;
+            for (int x = 0; x < width; x++)
+            {
+                double red = 0.0;
+                double green = 0.0;
+                double blue = 0.0;
 
-            // Apply the core to the current pixel and accumulate weighted pixel values.
-            pixCore(x, y, core, midst, red, green, blue);
+                pixCore(x, y, core, midst, red, green, blue);
 
-            // Calculate the index of the current pixel.
-            int pixIND2 = (y * (width * 3 + bmpPadd1) + x * 3);
+                int pixIND2 = (y * (width * 3 + bmpPadd1) + x * 3);
 
-            // Assign filtered values to the corresponding pixel in the filtered pixel vector.
-            filtpix[pixIND2] = (uint8_t)(blue);
-            filtpix[pixIND2+1] = (uint8_t)(green);
-            filtpix[pixIND2+2] = (uint8_t)(red);
+                filtpix[pixIND2] = static_cast<uint8_t>(blue);
+                filtpix[pixIND2 + 1] = static_cast<uint8_t>(green);
+                filtpix[pixIND2 + 2] = static_cast<uint8_t>(red);
+            }
         }
+    };
+
+    std::vector<std::thread> threads;
+    int rowsPerThread = height / numThreads;
+    int remainingRows = height % numThreads;
+    int startRow = 0;
+
+    for (int i = 0; i < numThreads; ++i)
+    {
+        int endRow = startRow + rowsPerThread + (i < remainingRows ? 1 : 0);
+        threads.emplace_back(processSection, startRow, endRow);
+        startRow = endRow;
     }
-    // Move filtered pixel data to the original pixel data.
+
+    for (auto& thread : threads)
+    {
+        thread.join();
+    }
+
     pix = std::move(filtpix);
 }
+
