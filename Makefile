@@ -1,19 +1,26 @@
 G = g++
 A = Lab1
-FLAGS = -Werror -Wpedantic -Wall
-CPP = $(wildcard *.cpp)
-OBJS = $(CPP:.cpp=.o)
+FLAGS = -Werror -Wpedantic -Wall -Iinclude
+SRC = $(wildcard src/*.cpp)
+OBJS = $(SRC:src/%.cpp=obj/%.o)
 
 all: $(A)
 
 $(A): $(OBJS)
 	$(G) $(OBJS) -o $@
 
-%.o: %.cpp
-	$(G) -c $< $(FLAGS)
+obj/%.o: src/%.cpp
+	@mkdir -p obj
+	$(G) -c $< $(FLAGS) -o $@
+
+docs:
+	doxygen ./Doxyfile
 
 clean:
-	rm $(OBJS) $(A)
+	rm -rf obj $(A)
 
 cleanall:
-	rm $(OBJS) $(A)
+	rm -rf obj $(A) images/*image.bmp
+
+.PHONY: all clean cleanall docs
+
